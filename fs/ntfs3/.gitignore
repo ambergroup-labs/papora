@@ -1,0 +1,6 @@
+*.img
+ntfs3-fsfuzz
+*.o
+*.so
+ntfs3_standalone
+ntfs3_general_standalone

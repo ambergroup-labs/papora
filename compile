@@ -1,0 +1,50 @@
+#!/usr/bin/python
+
+import sys, argparse, errno, os, shutil, subprocess
+
+supported = ['ntfs3']
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser()
+  parser.add_argument('-t', dest='type')
+  parser.add_argument('-c', action='store_true')
+  # parser.add_argument('-o', dest='object')
+  
+  args = parser.parse_args()
+
+  if args.type is None or args.type not in supported:
+    print('Please set valid type')
+    sys.exit(1)
+
+  # if args.object is None or args.object not in ['fsfuzz', 'executor']:
+  #   print 'Please set valid object'
+  #   sys.exit(1)
+
+  # copy config
+  #subprocess.call('cp -f %s-config arch/lkl/defconfig' % args.type, shell=True)
+
+  # step 1. compile ff-gcc
+  subprocess.check_call('cd ff-gcc && make', shell=True)
+
+  # step 2. compile lkl
+  # clean if necessary
+  if args.c:
+    subprocess.check_call('make -C lkl/ mrproper', shell=True)
+    subprocess.check_call('make -C lkl/tools/lkl clean', shell=True)
+  
+  # compile and copy source for afl coverage 
+  subprocess.check_call('cd core/afl-image/ && make', shell=True)
+  subprocess.check_call('cd core/afl-image/llvm_mode && env -u CPP -u CC -u MAKEFLAGS -u LDFLAGS LLVM_CONFIG=llvm-config make', shell=True)
+  subprocess.check_call('cp -f core/afl-image/kafl-llvm-rt.o lkl/tools/lkl', shell=True)
+  # compile with instrumenting gcc
+  dir_path = os.path.dirname(os.path.realpath(__file__))
+  subprocess.check_call('make -C lkl/tools/lkl -f Makefile.dev -j 8 CC="%s/ff-gcc/ff-gcc fs/%s"' % (dir_path, args.type), shell=True)
+
+  # step 3. compile core
+  subprocess.check_call('cd core && make', shell=True)
+  # copy object file
+  subprocess.call('mkdir fuzzers', shell=True)
+  subprocess.check_call('mv core/fsfuzz fuzzers/%s-fsfuzz' % args.type, shell=True)
+  subprocess.check_call('mv core/executor fuzzers/%s-executor' % args.type, shell=True)
+  subprocess.check_call('mv core/combined fuzzers/%s-combined' % args.type, shell=True)
+  subprocess.check_call('mv core/poc fuzzers/%s-poc' % args.type, shell=True)
